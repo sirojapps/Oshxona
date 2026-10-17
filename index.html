@@ -42,8 +42,8 @@ h1{font-family:var(--display);font-weight:800;font-size:22px;margin:0;letter-spa
 .sync i{width:8px;height:8px;border-radius:50%;background:var(--ok-v);display:inline-block;flex:none}
 .sync.off i{background:var(--out-v)} .sync.pend i{background:var(--low-v)}
 .me{font-size:12px;font-weight:700;border-radius:999px;padding:6px 12px;background:var(--accent-soft);color:var(--accent);border:0;max-width:50%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tabs{display:flex;gap:4px;margin-top:10px}
-.tabs button{flex:1;border:0;background:none;padding:10px 4px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent}
+.tabs{display:flex;gap:2px;margin-top:10px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1 0 auto;border:0;background:none;padding:10px 8px;font-size:14px;white-space:nowrap;font-weight:600;color:var(--muted);border-bottom:3px solid transparent}
 .tabs button[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent)}
 .badge{display:inline-block;min-width:20px;border-radius:999px;background:var(--out-v);color:#fff;font-size:11px;padding:1px 6px;margin-left:4px;vertical-align:1px}
 main{padding-block:16px 48px;display:flex;flex-direction:column;gap:14px}
@@ -113,6 +113,7 @@ label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-b
 .chip{border:1px solid var(--line);background:var(--sunken);border-radius:999px;padding:8px 14px;font-weight:600;min-height:40px}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;z-index:30;max-width:calc(100% - 32px);text-align:center}
+.rep{border-top:1px solid var(--line);padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center}.rep:first-child{border-top:0}.rep .bar{grid-column:1/-1;height:10px;border-radius:5px;background:var(--sunken);overflow:hidden}.rep .bar i{display:block;height:100%;background:var(--accent);border-radius:5px}.rep .v{text-align:right;white-space:nowrap}.rep .v b{font-family:var(--display);font-size:20px}.rep .v small{display:block;color:var(--muted);font-size:12px}
 pre.copy{white-space:pre-wrap;font-family:var(--body);font-size:14px;background:var(--sunken);border-radius:10px;padding:12px;margin:10px 0 0;overflow-wrap:anywhere}
 /* login */
 .gate{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));text-align:center}
@@ -169,7 +170,7 @@ pre.copy{white-space:pre-wrap;font-family:var(--body);font-size:14px;background:
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, limit, increment, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, limit, increment, writeBatch, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fb = initializeApp({
   apiKey: "AIzaSyBiIO9oJa4C5Md0bK-l2iqUTrPobyzNWFE",
@@ -182,7 +183,7 @@ const fb = initializeApp({
 const auth = getAuth(fb);
 const db = initializeFirestore(fb, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
-const C = { meta:"oshxona_meta", pins:"oshxona_pins", sess:"oshxona_sessions", prod:"oshxona_products", log:"oshxona_log" };
+const C = { meta:"oshxona_meta", pins:"oshxona_pins", sess:"oshxona_sessions", prod:"oshxona_products", log:"oshxona_log", day:"oshxona_stats_day", month:"oshxona_stats_month" };
 const UNITS = ["kg","litr","dona","qop","quti","pachka","bog'"];
 const ROLES = { admin:"Admin", skladchi:"Skladchi", yetkazuvchi:"Yetkazuvchi", kuzatuvchi:"Kuzatuvchi" };
 const WRITERS = ["admin","skladchi","yetkazuvchi"];
@@ -216,7 +217,7 @@ function lsSet(v){ try{ v ? localStorage.setItem(LS, JSON.stringify(v)) : localS
 const failed = e => { console.error(e); toast(e?.code==="permission-denied" ? "Ruxsat yo'q. Admin bilan bog'laning." : "Saqlab bo'lmadi."); };
 
 /* ---------- state ---------- */
-const S = { uid:null, me:null, tab:"stock", items:{}, logs:[], pins:[], open:null, adding:false, recv:null, confirm:null, err:"", copied:false, newPin:null, addingCode:false, codeRole:"skladchi", pend:{p:false,l:false} };
+const S = { uid:null, me:null, tab:"stock", items:{}, logs:[], pins:[], open:null, adding:false, recv:null, confirm:null, err:"", copied:false, newPin:null, addingCode:false, codeRole:"skladchi", period:"week", report:null, reportLoading:false, clearAsk:false, clearing:false, resetAsk:false, pend:{p:false,l:false} };
 const canWrite = () => S.me && WRITERS.includes(S.me.role);
 const isAdmin = () => S.me && S.me.role === "admin";
 const delta = {}, timers = {};               // stepper taps waiting to be saved
@@ -331,6 +332,17 @@ addEventListener("online",()=>{ syncUI(); verifySession(); });
 addEventListener("offline",syncUI);
 
 function logEntry(e){ addDoc(collection(db,C.log),{...e, by:S.me.name, at:Date.now()}).catch(failed); }
+const pad2=n=>String(n).padStart(2,"0");
+const dayKey=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const monthKey=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
+/* running totals per day and per month, so reports stay quick and survive history cleanup */
+function stat(p, kind, amt){
+  if (!(amt>0) || !p) return;
+  const now=new Date(), patch={ [kind]:{[p.id]:increment(amt)}, n:{[p.id]:p.name}, u:{[p.id]:p.unit} };
+  setDoc(doc(db,C.day,dayKey(now)),{...patch, date:dayKey(now)},{merge:true}).catch(failed);
+  setDoc(doc(db,C.month,monthKey(now)),{...patch, month:monthKey(now)},{merge:true}).catch(failed);
+  S.report=null;
+}
 /* − / + taps collect for a moment, then save as one change */
 function tap(id, d){
   delta[id]=(delta[id]||0)+d;
@@ -342,19 +354,20 @@ function flush(id){
   const d=Math.round((delta[id]||0)*100)/100; delete delta[id];
   const p=S.items[id]; if (!p || !d){ syncUI(); return; }
   updateDoc(doc(db,C.prod,id),{qty:increment(d), at:Date.now(), by:S.me.name}).catch(failed);
-  logEntry({t:d<0?"out":"in", n:p.name, u:p.unit, d, q:Math.max(0,Math.round(((+p.qty||0)+d)*100)/100)});
+  logEntry({t:d<0?"out":"in", p:id, n:p.name, u:p.unit, d, q:Math.max(0,Math.round(((+p.qty||0)+d)*100)/100)});
+  stat(p, d<0?"out":"in", Math.abs(d));
 }
 function setQty(id, v){
   const p=S.items[id]; clearTimeout(timers[id]); delete delta[id];
   const old=+p.qty||0; if (Math.abs(old-v)<1e-9) return render();
   updateDoc(doc(db,C.prod,id),{qty:v, at:Date.now(), by:S.me.name}).catch(failed);
-  logEntry({t:"fix", n:p.name, u:p.unit, d:v-old, q:v});
+  logEntry({t:"fix", p:id, n:p.name, u:p.unit, d:v-old, q:v});
 }
 
 /* ---------- views ---------- */
 function vTabs(){
   const n=orders().length;
-  const tabs=[...(canWrite()?[["stock","Ombor"]]:[]),["order","Buyurtma"],["log","Tarix"],...(isAdmin()?[["codes","Kodlar"]]:[])];
+  const tabs=[...(canWrite()?[["stock","Ombor"]]:[]),["order","Buyurtma"],["log","Tarix"],["report","Hisobot"],...(isAdmin()?[["codes","Kodlar"]]:[])];
   if (!tabs.some(t=>t[0]===S.tab)) S.tab=tabs[0][0];
   $("tabs").innerHTML = tabs.map(([k,l])=>`<button data-tab="${k}" ${S.tab===k?'aria-current="page"':""}>${l}${k==="order"&&n?`<span class="badge num">${n}</span>`:""}</button>`).join("");
 }
@@ -417,6 +430,14 @@ function vOrder(){
     </div>`; }).join("") : `<div class="empty"><b>Hozircha hech narsa kerak emas</b>Barcha mahsulotlar yetarli.</div>`}</section>
   ${o.length ? `<section class="card"><p class="label">Matn ko'rinishida</p><p class="hint">Telegram orqali yuborish uchun nusxalang.</p><pre class="copy" id="otext">${esc(orderText())}</pre><div style="margin-top:10px"><button class="btn ghost wide" data-act="copy">${S.copied?"Nusxalandi ✓":"Ro'yxatni nusxalash"}</button></div></section>` : ""}`;
 }
+function vClear(){
+  if (!isAdmin() || !S.logs.length) return "";
+  if (S.clearing) return `<div class="notice">Tozalanmoqda…</div>`;
+  if (!S.clearAsk) return `<button class="btn ghost wide" data-act="clearAsk">Tarixni tozalash</button>`;
+  return `<section class="card"><h2>Tarixni tozalash</h2><p class="hint" style="margin:6px 0 12px">Yozuvlar butunlay o'chiriladi. Hisobotdagi umumiy raqamlar saqlanib qoladi.</p>
+    <div class="btns"><button class="btn ghost" data-act="clear30">30 kundan eskisini</button><button class="btn danger" data-act="clearAll">Hammasini</button></div>
+    <button class="btn ghost wide" style="margin-top:8px" data-act="clearNo">Bekor qilish</button></section>`;
+}
 function vLog(){
   if (!S.logs.length) return `<section class="shelf"><div class="empty"><b>Hali yozuv yo'q</b>Mahsulot ishlatilsa yoki keltirilsa, kim, qachon, qancha ekani shu yerda ko'rinadi.</div></section>`;
   let out="", last=null, rows="";
@@ -428,7 +449,51 @@ function vLog(){
     const amt = l.t==="in" ? "+"+fmt(l.d) : l.t==="out" ? "−"+fmt(Math.abs(l.d)) : l.t==="fix"||l.t==="new" ? fmt(l.q) : "";
     rows+=`<div class="log"><span class="sign ${esc(l.t)}">${sign[l.t]||"•"}</span><span class="t"><b>${esc(l.n)}</b><small>${esc(l.by)} ${verb[l.t]||""} · ${hm(d)}</small></span><span class="a num">${amt?amt+" "+esc(l.u):""}</span></div>`;
   }
-  return out+`<section class="shelf">${rows}</section>`;
+  return vClear()+out+`<section class="shelf">${rows}</section>`;
+}
+const PERIODS={week:"Shu hafta",month:"Shu oy",year:"Shu yil"};
+function periodRange(per){
+  const now=new Date();
+  if (per==="week"){ const s=new Date(now); const dow=(now.getDay()+6)%7; s.setDate(now.getDate()-dow); return {col:C.day, field:"date", from:dayKey(s), label:`${dayName(s)} — ${dayName(now)}`}; }
+  if (per==="month") return {col:C.day, field:"date", from:monthKey(now)+"-01", label:`${MONTHS[now.getMonth()]} ${now.getFullYear()}`};
+  return {col:C.month, field:"month", from:now.getFullYear()+"-01", label:`${now.getFullYear()}-yil`};
+}
+async function loadReport(){
+  const per=S.period, r=periodRange(per);
+  S.reportLoading=true;
+  try{
+    const snap=await getDocs(query(collection(db,r.col), where(r.field,">=",r.from)));
+    const tot={};
+    snap.docs.forEach(d=>{ const v=d.data();
+      for (const k of ["out","in"]) for (const [pid,a] of Object.entries(v[k]||{})){
+        const t=tot[pid]||(tot[pid]={id:pid,name:(v.n||{})[pid]||"?",unit:(v.u||{})[pid]||"",out:0,in:0});
+        t[k]+= +a||0; if ((v.n||{})[pid]) t.name=v.n[pid];
+      }});
+    if (S.period===per) S.report={per, label:r.label, rows:Object.values(tot)};
+  }catch(e){ S.report={per, label:r.label, rows:[], err:true}; }
+  S.reportLoading=false; if (S.tab==="report") render(true);
+}
+function vReport(){
+  const chips=`<div class="chips">${Object.entries(PERIODS).map(([k,v])=>`<button class="chip" data-act="period" data-p="${k}" aria-pressed="${S.period===k}">${v}</button>`).join("")}</div>`;
+  if (!S.report || S.report.per!==S.period){ if (!S.reportLoading) loadReport(); return chips+`<section class="shelf"><div class="empty">Hisoblanmoqda…</div></section>`; }
+  const R=S.report;
+  if (R.err) return chips+`<section class="shelf"><div class="empty"><b>Hisobotni yuklab bo'lmadi</b>Internetni tekshirib, qayta oching.</div></section>`;
+  const rows=R.rows.filter(r=>r.out>0||r.in>0).sort((a,b)=>b.out-a.out||String(a.name).localeCompare(String(b.name),"uz"));
+  const max=Math.max(1,...rows.map(r=>r.out));
+  return `${chips}<p class="hint">${esc(R.label)} · har bir mahsulotdan qancha ishlatilgani va qancha kelgani</p>
+  <section class="shelf">${rows.length ? rows.map(r=>`<div class="rep"><div style="min-width:0"><b>${esc(r.name)}</b><div class="meta">Keldi: <span class="num">+${fmt(r.in)} ${esc(r.unit)}</span></div></div>
+    <div class="v num"><b>${fmt(r.out)}</b> ${esc(r.unit)}<small>ishlatildi</small></div>
+    <div class="bar"><i style="width:${Math.round(r.out/max*100)}%"></i></div></div>`).join("")
+    : `<div class="empty"><b>Bu davrda hali harakat yo'q</b>Mahsulot ishlatilsa yoki keltirilsa, shu yerda jamlanib boradi.</div>`}</section>
+  <p class="hint">Qoldiqni qo'lda tuzatish hisobotga kirmaydi.</p>
+  ${vReset()}`;
+}
+function vReset(){
+  if (!isAdmin()) return "";
+  if (S.clearing) return `<div class="notice">Tozalanmoqda…</div>`;
+  if (!S.resetAsk) return `<button class="btn ghost wide" data-act="resetAsk">Hisobotni noldan boshlash</button>`;
+  return `<section class="card"><h2>Hisobotni noldan boshlash</h2><p class="hint" style="margin:6px 0 12px">Barcha haftalik, oylik va yillik raqamlar o'chadi va hisob shu kundan qaytadan boshlanadi. Mahsulotlar, qoldiqlar va kodlar o'zgarmaydi.</p>
+    <div class="btns"><button class="btn ghost" data-act="resetNo">Bekor qilish</button><button class="btn danger" data-act="resetYes">Ha, noldan boshlash</button></div></section>`;
 }
 function vCodes(){
   const order={admin:0,skladchi:1,yetkazuvchi:2,kuzatuvchi:3};
@@ -453,13 +518,13 @@ function render(force){
   deferred=false;
   vTabs();
   const focus=a?.dataset?.qty;
-  main.innerHTML = S.tab==="stock"?vStock() : S.tab==="order"?vOrder() : S.tab==="log"?vLog() : vCodes();
+  main.innerHTML = S.tab==="stock"?vStock() : S.tab==="order"?vOrder() : S.tab==="log"?vLog() : S.tab==="report"?vReport() : vCodes();
   if (focus){ const el=main.querySelector(`[data-qty="${focus}"]`); if (el){ el.focus(); } }
 }
 main.addEventListener("focusout", ()=>setTimeout(()=>{ if (deferred) render(); },0));
 
 /* ---------- events ---------- */
-$("tabs").addEventListener("click", e=>{ const b=e.target.closest("button"); if(!b) return; S.tab=b.dataset.tab; S.recv=null; S.confirm=null; S.err=""; render(true); scrollTo(0,0); });
+$("tabs").addEventListener("click", e=>{ const b=e.target.closest("button"); if(!b) return; S.tab=b.dataset.tab; S.recv=null; S.confirm=null; S.err=""; S.clearAsk=false; S.resetAsk=false; if (S.tab==="report") S.report=null; render(true); scrollTo(0,0); });
 $("me").onclick=()=>{
   if (S.confirm==="logout"){ S.confirm=null; logout(); return; }
   S.confirm="logout"; $("me").textContent="Chiqish uchun yana bosing";
@@ -488,6 +553,34 @@ main.addEventListener("click", async e=>{
   if (a==="copy"){
     try{ await navigator.clipboard.writeText(orderText()); S.copied=true; setTimeout(()=>{ S.copied=false; render(true); },2000); }
     catch(err){ const r=document.createRange(); r.selectNodeContents($("otext")); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast("Matn belgilandi, nusxalang"); return; }
+  }
+  if (a==="period"){ S.period=el.dataset.p; S.report=null; }
+  if (a==="resetAsk"){ S.resetAsk=true; }
+  if (a==="resetNo"){ S.resetAsk=false; }
+  if (a==="resetYes"){
+    if (!navigator.onLine){ toast("Buning uchun internet kerak"); return; }
+    S.resetAsk=false; S.clearing=true; render(true);
+    try{
+      for (const col of [C.day, C.month]){
+        const snap=await getDocs(collection(db,col));
+        for (let i=0;i<snap.docs.length;i+=400){ const b=writeBatch(db); snap.docs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit(); }
+      }
+      toast("Hisobot noldan boshlandi");
+    }catch(err){ failed(err); }
+    S.clearing=false; S.report=null;
+  }
+  if (a==="clearAsk"){ S.clearAsk=true; }
+  if (a==="clearNo"){ S.clearAsk=false; }
+  if (a==="clear30"||a==="clearAll"){
+    if (!navigator.onLine){ toast("Tozalash uchun internet kerak"); return; }
+    S.clearAsk=false; S.clearing=true; render(true);
+    try{
+      const q = a==="clearAll" ? collection(db,C.log) : query(collection(db,C.log), where("at","<",Date.now()-30*864e5));
+      const snap=await getDocs(q); let n=0;
+      for (let i=0;i<snap.docs.length;i+=400){ const b=writeBatch(db); snap.docs.slice(i,i+400).forEach(d=>b.delete(d.ref)); await b.commit(); n+=Math.min(400,snap.docs.length-i); }
+      toast(n ? `${n} ta yozuv o'chirildi` : "O'chiradigan eski yozuv yo'q");
+    }catch(err){ failed(err); }
+    S.clearing=false;
   }
   if (a==="addCode"){ S.addingCode=true; S.newPin=null; S.err=""; render(true); $("cn")?.focus(); return; }
   if (a==="cancelCode"){ S.addingCode=false; S.err=""; }
@@ -527,7 +620,8 @@ main.addEventListener("submit", async e=>{
     const p=S.items[f.dataset.id], amt=num(d.amt);
     if (!(amt>0)){ toast("Kelgan miqdorni kiriting"); return; }
     updateDoc(doc(db,C.prod,p.id),{qty:increment(amt), at:Date.now(), by:S.me.name}).catch(failed);
-    logEntry({t:"in",n:p.name,u:p.unit,d:amt,q:Math.round((shown(p)+amt)*100)/100});
+    logEntry({t:"in",p:p.id,n:p.name,u:p.unit,d:amt,q:Math.round((shown(p)+amt)*100)/100});
+    stat(p,"in",amt);
     S.recv=null; document.activeElement?.blur(); toast(`${p.name}: +${fmt(amt)} ${p.unit} omborga qo'shildi`);
   }
   if (kind==="code"){
