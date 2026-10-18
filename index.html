@@ -132,7 +132,20 @@ pre.copy{white-space:pre-wrap;font-family:var(--body);font-size:14px;background:
 </head>
 <body>
 
-<div class="gate" id="scrLoad"><div class="logo"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><p class="hint" id="loadMsg">Yuklanmoqda…</p></div>
+<div class="gate" id="scrLoad"><div class="logo"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div><p class="hint" id="loadMsg">Yuklanmoqda…</p><div id="rescue" hidden style="flex-direction:column;gap:10px;width:100%;max-width:300px"><button class="btn" type="button" onclick="location.reload()">Qayta urinish</button><button class="btn" type="button" style="background:transparent;color:var(--accent);border:1px solid var(--line)" onclick="window.__fixApp()">Tozalab qayta ochish</button><p class="hint">Ma'lumotlaringiz o'chmaydi, ular serverda saqlangan.</p></div></div>
+<script>
+window.__booted=false;
+window.__fixApp=async function(){
+  try{ if(navigator.serviceWorker){ const rs=await navigator.serviceWorker.getRegistrations(); for(const r of rs) await r.unregister(); } }catch(e){}
+  try{ if(window.caches){ for(const k of await caches.keys()) await caches.delete(k); } }catch(e){}
+  try{ if(indexedDB.databases){ for(const d of await indexedDB.databases()) if(d.name&&/firestore|firebase/i.test(d.name)) indexedDB.deleteDatabase(d.name); } }catch(e){}
+  setTimeout(function(){ location.replace(location.pathname+"?v="+Date.now()); },600);
+};
+window.__stall=function(msg){ if(window.__booted) return; var m=document.getElementById("loadMsg"); if(msg&&m) m.textContent=msg; var r=document.getElementById("rescue"); if(r){ r.hidden=false; r.style.display="flex"; } };
+setTimeout(function(){ window.__stall(navigator.onLine?"Ulanish juda sekin yoki to'xtab qoldi.":"Internet yo'q. Internetni yoqib qayta urinib ko'ring."); },12000);
+addEventListener("error",function(e){ window.__stall("Ilovani ochib bo'lmadi."); });
+addEventListener("unhandledrejection",function(){ });
+</script>
 
 <div class="gate" id="scrSetup" hidden>
   <div class="logo"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div>
@@ -181,7 +194,9 @@ const fb = initializeApp({
   appId: "1:237744873377:web:a4618fb3c6906500bef5e0"
 });
 const auth = getAuth(fb);
-const db = initializeFirestore(fb, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+let db;
+try{ db = initializeFirestore(fb, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+catch(e){ console.error(e); db = initializeFirestore(fb, {}); }
 
 const C = { meta:"oshxona_meta", pins:"oshxona_pins", sess:"oshxona_sessions", prod:"oshxona_products", log:"oshxona_log", day:"oshxona_stats_day", month:"oshxona_stats_month" };
 const UNITS = ["kg","litr","dona","qop","quti","pachka","bog'"];
@@ -211,7 +226,7 @@ const $ = id => document.getElementById(id);
 const main = $("main");
 let toastT;
 function toast(t){ clearTimeout(toastT); document.querySelector(".toast")?.remove(); const el=document.createElement("div"); el.className="toast"; el.setAttribute("role","status"); el.textContent=t; document.body.append(el); toastT=setTimeout(()=>el.remove(),2600); }
-function show(id){ for (const s of ["scrLoad","scrSetup","scrPin","scrApp"]) $(s).hidden = s!==id; }
+function show(id){ if (id!=="scrLoad") window.__booted=true; for (const s of ["scrLoad","scrSetup","scrPin","scrApp"]) $(s).hidden = s!==id; }
 function lsGet(){ try{ return JSON.parse(localStorage.getItem(LS)||"null"); }catch(e){ return null; } }
 function lsSet(v){ try{ v ? localStorage.setItem(LS, JSON.stringify(v)) : localStorage.removeItem(LS); }catch(e){} }
 const failed = e => { console.error(e); toast(e?.code==="permission-denied" ? "Ruxsat yo'q. Admin bilan bog'laning." : "Saqlab bo'lmadi."); };
@@ -232,15 +247,15 @@ const orders = () => list().filter(p => status(p)!=="ok").sort((a,b)=>(status(a)
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 onAuthStateChanged(auth, async user => {
   if (!user){
-    if (!navigator.onLine){ $("loadMsg").textContent="Birinchi marta kirish uchun internet kerak."; return; }
-    signInAnonymously(auth).catch(e => { $("loadMsg").textContent = "Ulanib bo'lmadi: "+(e.code||e.message); });
+    if (!navigator.onLine){ window.__stall("Birinchi marta kirish uchun internet kerak."); return; }
+    signInAnonymously(auth).catch(e => { window.__stall("Ulanib bo'lmadi: "+(e.code||e.message)); });
     return;
   }
   S.uid = user.uid;
   const saved = lsGet();
   if (saved && saved.pin){ S.me = saved; enterApp(); verifySession(); return; }
-  try{ const m = await getDoc(doc(db,C.meta,"setup")); if (!m.exists()){ show("scrSetup"); return; } }
-  catch(e){ if (!navigator.onLine){ $("loadMsg").textContent="Birinchi marta kirish uchun internet kerak."; return; } }
+  try{ const m = await Promise.race([getDoc(doc(db,C.meta,"setup")), new Promise((_,r)=>setTimeout(()=>r(new Error("timeout")),8000))]); if (!m.exists()){ show("scrSetup"); return; } }
+  catch(e){ if (!navigator.onLine){ window.__stall("Birinchi marta kirish uchun internet kerak."); return; } }
   showPin();
 });
 async function verifySession(){

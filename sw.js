@@ -1,4 +1,4 @@
-const CACHE = "oshxona-v1";
+const CACHE = "oshxona-v2";
 const CORE = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
